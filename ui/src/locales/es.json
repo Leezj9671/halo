@@ -1228,5 +1228,9 @@
   "core.formkit.secret.includes_keys": "Incluye campos: {keys}",
   "core.formkit.secret.no_fields": "No hay campos",
   "core.formkit.secret.required_keys_tip": "Los campos requeridos para el elemento del formulario actual incluyen:",
-  "core.dashboard.widgets.presets.upvotes_stats.title": "Me gusta"
+  "core.dashboard.widgets.presets.upvotes_stats.title": "Me gusta",
+  "core.dashboard.widgets.presets.trending_posts.title": "Publicaciones populares",
+  "core.dashboard.widgets.presets.trending_posts.empty.title": "No hay publicaciones publicadas",
+  "core.dashboard.widgets.presets.trending_posts.visits_count": "{count} visitas",
+  "core.dashboard.widgets.presets.trending_posts.config.fields.top_n.label": "Número de publicaciones a mostrar"
 }

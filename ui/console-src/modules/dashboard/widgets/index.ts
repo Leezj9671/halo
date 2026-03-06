@@ -10,6 +10,7 @@ import UpvotesStatsWidget from "./presets/core/upvotes-stats/UpvotesStatsWidget.
 import ViewsStatsWidget from "./presets/core/view-stats/ViewsStatsWidget.vue";
 import PostStatsWidget from "./presets/posts/PostStatsWidget.vue";
 import RecentPublishedWidget from "./presets/posts/RecentPublishedWidget.vue";
+import TrendingPostsWidget from "./presets/posts/TrendingPostsWidget.vue";
 import SinglePageStatsWidget from "./presets/single-pages/SinglePageStatsWidget.vue";
 import NotificationWidget from "./presets/users/NotificationWidget.vue";
 import UserStatsWidget from "./presets/users/UserStatsWidget.vue";
@@ -43,6 +44,32 @@ export const internalWidgetDefinitions: DashboardWidgetDefinition[] = [
     component: markRaw(RecentPublishedWidget),
     group: "core.dashboard.widgets.groups.post",
     defaultConfig: {},
+    defaultSize: {
+      w: 6,
+      h: 12,
+      minH: 6,
+      minW: 3,
+    },
+    permissions: ["system:posts:view"],
+  },
+  {
+    id: "core:post:trending",
+    component: markRaw(TrendingPostsWidget),
+    group: "core.dashboard.widgets.groups.post",
+    configFormKitSchema: () => [
+      {
+        $formkit: "number",
+        label: i18n.global.t(
+          "core.dashboard.widgets.presets.trending_posts.config.fields.top_n.label"
+        ),
+        name: "top_n",
+        min: 1,
+        max: 20,
+      },
+    ],
+    defaultConfig: {
+      top_n: 10,
+    },
     defaultSize: {
       w: 6,
       h: 12,
