@@ -2,10 +2,14 @@ package run.halo.app.content.stats;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
@@ -16,6 +20,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import run.halo.app.core.counter.MeterUtils;
 import run.halo.app.core.extension.Counter;
+import run.halo.app.core.extension.DailySiteStats;
 import run.halo.app.event.post.VisitedEvent;
 import run.halo.app.extension.ExtensionClient;
 import run.halo.app.extension.GroupVersionKind;
@@ -32,6 +37,8 @@ import run.halo.app.infra.InitializationPhase;
 /**
  * Update counters after receiving visit event.
  * It will cache the count in memory for one minute and then batch update to the database.
+ * In addition to updating the per-resource {@link Counter}, it also maintains a per-day
+ * {@link DailySiteStats} record so that time-series charts can be rendered in the dashboard.
  *
  * @author guqing
  * @since 2.0.0
@@ -40,11 +47,16 @@ import run.halo.app.infra.InitializationPhase;
 @Component
 public class VisitedEventReconciler
     implements Reconciler<VisitedEventReconciler.VisitCountBucket>, SmartLifecycle {
+    private static final DateTimeFormatter DATE_FORMATTER =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
     private volatile boolean running = false;
 
     private final ExtensionClient client;
     private final RequestQueue<VisitCountBucket> visitedEventQueue;
     private final Map<String, Integer> pooledVisitsMap = new ConcurrentHashMap<>();
+    /** Pooled site-wide visit count for the current UTC day (key = yyyy-MM-dd). */
+    private final Map<String, AtomicInteger> pooledDailyVisitsMap = new ConcurrentHashMap<>();
     private final Controller visitedEventController;
 
     public VisitedEventReconciler(ExtensionClient client) {
@@ -83,6 +95,8 @@ public class VisitedEventReconciler
             visitedEventQueue.addImmediately(new VisitCountBucket(item.getKey(), item.getValue()));
             iterator.remove();
         }
+        // Flush daily visit counters to the database.
+        flushDailyVisits();
     }
 
     @Override
@@ -112,6 +126,7 @@ public class VisitedEventReconciler
                 createOrUpdateVisits(item.getKey(), item.getValue());
                 iterator.remove();
             }
+            flushDailyVisits();
         } catch (Exception e) {
             log.error("Failed to persist visits to database.", e);
         }
@@ -130,6 +145,36 @@ public class VisitedEventReconciler
     }
 
     public record VisitCountBucket(String name, int visits) {
+    }
+
+    /** Drain {@link #pooledDailyVisitsMap} and persist to {@link DailySiteStats}. */
+    private void flushDailyVisits() {
+        Iterator<Map.Entry<String, AtomicInteger>> iterator =
+            pooledDailyVisitsMap.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, AtomicInteger> entry = iterator.next();
+            String date = entry.getKey();
+            // Remove first so that any concurrent increment after this point will create a new
+            // entry; the AtomicInteger referenced by 'entry' can no longer be reached via the
+            // map and will not receive further increments.
+            iterator.remove();
+            int visits = entry.getValue().get();
+            if (visits > 0) {
+                createOrUpdateDailyVisits(date, visits);
+            }
+        }
+    }
+
+    private void createOrUpdateDailyVisits(String date, int visits) {
+        client.fetch(DailySiteStats.class, date)
+            .ifPresentOrElse(stats -> {
+                stats.setVisit(ObjectUtils.defaultIfNull(stats.getVisit(), 0) + visits);
+                client.update(stats);
+            }, () -> {
+                DailySiteStats stats = DailySiteStats.empty(date);
+                stats.setVisit(visits);
+                client.create(stats);
+            });
     }
 
     @Component
@@ -158,6 +203,10 @@ public class VisitedEventReconciler
                     return visits + 1;
                 }
             });
+            // Also accumulate in the daily bucket for the current UTC day.
+            String today = LocalDate.now(ZoneOffset.UTC).format(DATE_FORMATTER);
+            pooledDailyVisitsMap.computeIfAbsent(today, k -> new AtomicInteger(0))
+                .incrementAndGet();
         }
 
         private boolean checkVisitSubject(GroupPluralName groupPluralName) {

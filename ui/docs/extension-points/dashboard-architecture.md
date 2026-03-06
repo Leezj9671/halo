@@ -155,6 +155,56 @@ interface DashboardResponsiveLayout {
 
 全局统计数据通过 `console-src/composables/use-dashboard-stats.ts` 中的 `useDashboardStats()` composable 统一请求，内部使用 `@tanstack/vue-query` 缓存，避免多个小部件重复请求。
 
+> **说明：全局统计 API 只返回累计总量，没有按天的细分数据。**  
+> 如需展示按天的访问趋势图，请使用下方描述的每日统计 API。
+
+---
+
+### 6a. 后端每日统计数据（DailySiteStats）
+
+> **背景**：`Counter` 扩展模型只存储**累计总量**（`visit`、`upvote`、`totalComment` 等），不包含任何时间维度信息，因此无法直接用于绘制折线图或柱状图。为此，后端新增了 `DailySiteStats` 扩展模型，专门记录**每天**的站点访问数据。
+
+#### 数据存储原理
+
+- **模型**：`DailySiteStats`（`metrics.halo.run/v1alpha1`）
+- **主键（`metadata.name`）**：UTC 日期字符串，格式 `yyyy-MM-dd`，例如 `2024-01-15`
+- **字段**：`visit`（当日访问数）、`upvote`（当日点赞数）、`comment`（当日新增评论数）
+
+每当访客触发 `VisitedEvent` 时，`VisitedEventReconciler` 除了更新对应内容的 `Counter`（累计），还会同时将当日访问计数累加到内存中的 `pooledDailyVisitsMap`。调度器每分钟把内存数据批量写入数据库对应的 `DailySiteStats` 记录（不存在则自动创建），保证了**高吞吐下的低写放大**。
+
+```
+访客访问页面
+  │
+  ▼ VisitedEvent 被触发
+  │
+  ├─ pooledVisitsMap[counterName] += 1       (per-resource 累计，已有逻辑)
+  └─ pooledDailyVisitsMap[today] += 1        (新增：当日站点总访问，内存缓冲)
+          │
+          ▼ 每分钟 @Scheduled 刷新
+  ┌─ Counter (per-resource 累计写入 DB)
+  └─ DailySiteStats[yyyy-MM-dd] (当日汇总写入 DB，不存在则 create)
+```
+
+#### 每日统计 API
+
+```
+GET /apis/api.console.halo.run/v1alpha1/stats/daily?days=30
+```
+
+- `days`（可选，默认 30，最大 365）：返回最近 N 天的数据
+- 返回结果为 JSON 数组，**包含完整的日期序列（没有数据的天补 0）**，便于前端直接用于图表：
+
+```json
+[
+  { "date": "2024-01-01", "visit": 0,   "upvote": 0, "comment": 0 },
+  { "date": "2024-01-02", "visit": 128, "upvote": 3, "comment": 7 },
+  ...
+  { "date": "2024-01-30", "visit": 256, "upvote": 8, "comment": 12 }
+]
+```
+
+此 API 可直接用于在仪表盘中实现访问趋势折线图、柱状图等时序可视化小部件。
+
 ---
 
 ### 7. 插件扩展点
