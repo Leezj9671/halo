@@ -19,6 +19,7 @@ import run.halo.app.core.attachment.extension.Thumbnail;
 import run.halo.app.core.extension.AnnotationSetting;
 import run.halo.app.core.extension.AuthProvider;
 import run.halo.app.core.extension.Counter;
+import run.halo.app.core.extension.DailySiteStats;
 import run.halo.app.core.extension.Device;
 import run.halo.app.core.extension.Menu;
 import run.halo.app.core.extension.MenuItem;
@@ -698,6 +699,7 @@ class SchemeInitializer implements SmartLifecycle {
         });
         // metrics.halo.run
         schemeManager.register(Counter.class);
+        schemeManager.register(DailySiteStats.class);
         // auth.halo.run
         schemeManager.register(AuthProvider.class);
         schemeManager.register(UserConnection.class, is -> {

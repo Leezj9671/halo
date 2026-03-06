@@ -1228,5 +1228,9 @@
   "core.formkit.secret.includes_keys": "包含字段：{keys}",
   "core.formkit.secret.no_fields": "没有字段",
   "core.formkit.secret.required_keys_tip": "当前表单项所需的密钥字段包括：",
-  "core.dashboard.widgets.presets.upvotes_stats.title": "点赞"
+  "core.dashboard.widgets.presets.upvotes_stats.title": "点赞",
+  "core.dashboard.widgets.presets.trending_posts.title": "热门文章",
+  "core.dashboard.widgets.presets.trending_posts.empty.title": "暂无已发布的文章",
+  "core.dashboard.widgets.presets.trending_posts.visits_count": "{count} 次访问",
+  "core.dashboard.widgets.presets.trending_posts.config.fields.top_n.label": "显示文章数量"
 }
